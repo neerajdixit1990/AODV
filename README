@@ -1,0 +1,159 @@
+Group Members
+==============
+Member 1
+--------
+Name 	: Keshav Velhal
+SBU ID	: 110276432
+Email	: keshav.velhal@stonybrook.edu
+
+Member 2
+--------
+Name	: Neeraj Dixit
+SBU ID	: 109951838
+Email	: ndixit@cs.stonybrook.edu
+
+USER Documentation:
+===================
+- The complete assignment consists of 3 .C file namely server.c, client.c,odr.c
+  and the Makefile and README
+- To compile the assignment just run the command 'make' in the assignment
+  directory
+- To clean the executable files just run the command 'make clean' in the
+  assignment directory
+- First deploy the the three execulable files client, odr and server on t
+  the virtual machines's-1 to 10.
+   Example:
+  ~/cse533/deploy_app client server odr 
+- To invoke the client just execute 'client' executable on any virtual machine.
+  Example:   
+  ./client
+- To choose    vm's from 1 to 10 enter any number from 1-10.
+  
+- To invoke the server just execute 'server' executable on any virtual machine.
+  Example:   
+  ./server
+  or
+  ~/cse533/start_app server
+- The odr should be started on all the virtual machines. The staleness paramater 
+  must be passed as arguments.
+  Example:
+   ~/cse533/start_app "odr 10" 
+    or  
+  ./odr 10 
+ 
+ System Documentation:  
+ ==================== 
+  1. CLIENT:
+     - Client prompts the user to choose vm's from 1 to 10,so as to communicate with that server.
+	 - Then client binds to the temporary path name on the unix socket.
+	 - Client sends  the  information to the  be sent to the server prompted by user this is done 
+	   in msg_send function.
+	 - In the msg_send function 
+	   Client sends the information to be sent to the server through the odr.Message is sent on the 
+	   odr_path.
+     - The message sent is a single character sequence which contains the 
+	   following information :
+       socket descipter of write,canonical ip address of destination,port number of destination and 
+	   message to be sent,route_rediscovery flag.
+     - Then the client waits till a time_out (using select) occurs to receive message from the server.
+     - The msg_recv fuction 
+	   client receive's the information sent by the server through the odr(on odr_path). 
+	   The message_received is in   a single character sequence and contains information of socket 
+	   descriptor for read, message received i.e:timestamp of the server, canonical ip address of source
+	   ,port number of source.	   
+	 - If the message is not received from the server through the odr within the time out,
+	   it sets the route_rediscovery flag=1 and resends the message to the server prompted by user
+	    through the odr(on odr_path).
+		
+ 2. SERVER: 
+     - Then server binds to the a fixed path name on the unix socket.
+	 - Server enters an infinite sequence calls of  msg_receive and msg_send ,awaiting server requests
+	   and  responding to client request.
+	 - Server waits on recv_from to receive the the client request through the odr (on odr_path).
+	 - In  msg_recv function
+       Server	 receive's the information sent by the client through the odr (on odr_path).
+	   The message_received is in   a single character sequence and contains information of socket descriptor for read, 
+	   message sent by the client , canonical ip address of source, port number of source.
+     -  Server  then responds to the client request through msg_send function.	   
+	 - In msg_send function 
+	   client responds to  the client through the odr(on the odr_path.).
+	 - The message sent back to the client  is a single character sequence which 
+	   contains the following information socket descipter of write,canonical ip address of 
+	   server,port number of server and message to be sent. ie.  current time_stamp of the server.
+	   
+3.  ODR :
+    
+    - Odr first takes the staleness parameter  through a single command line argument.
+    - Odr communicates with server and client through UNIX Sockets and to the other ODR'S using PF_Packet sockets    
+    - Odr binds to the unix domain sockets on the odr_path.
+	- A routing table is created to store all the routing information.
+	- ODR waits on select to get a request from UNIX or  PF_PACKET Socket.
+    - When client requests for information from a server UNIX socket is set.
+	- Odr checks if  port for recived sun_path from client  is present in  port_sun_path_table.
+    - If it is not present it assigns an ephemeral port to recived sun_path from client and stores it in
+	  port_sun_path_table  this is done in port_to_path_conv function. 
+    - Odr first extracts information from message sent by client this is done in extract_info_from_unix function.
+    - First odr check in  routing table entry if route to destination is  present and Staleness is also checked
+	  (this  done in check_routing_table_staleness) .
+	- staleness is checked (in check_route_staleness function). 
+    - If route to destination is present and entry is not stale and  Application payload packet is sent directly to server.
+       this is done in gen_update_send_payload.
+	- If route to destination is  not present and or is  stale( route_redicovery flag is set to 1).odr message of type 0-RREQ 
+	  is brodcasted to all the interfaces (this is done gen_send_rreq function).
+    - Get_hw_addrs is used to obtain index  and IP and Ethernet Address.
+    -  If odr communicates with a odr 	PF_PACKET Socket is set.
+	
+	-  If odr message received  is of type 0 - i.e RREQ.
+	-  If route_rediscovery bit is not set to 0, it is checked in  routing table entry if route to destination is  present 
+	   and Staleness is also checked (this  is done in check_routing_table_staleness). 
+    -  If route to destination is present and entry is not stale then odr message of type 1:-RREP is sent back to the
+	   source address in the routing table (this is done in gen_update_send_rrep function).
+    -  Routing_table is updated along forward route (route to source) (this is done in update_routing_table function).   	   
+	-  If 	route to destination is not present or odr is on itermediate node or   route_rediscovery bit is 1.
+	   odr message of type 0-RREQ  is flooded or broadcasted to all the interfaces (this is done in flood_rreq function).
+	-  is_valid_broadcast function is used to check if a    odr message of type 0-RREQ recived has a different 
+	   broadcast id  which is taken into consideration else the RREQ message is ignored.
+	-  If odr message of type 0-RREQ reaches destination odr a RREP is sent back to the
+	   source address in the routing table (this is done in gen_update_send_rrep function).
+	
+				
+	-  If odr message received  is of type 1 - i.e RREP.
+	-  routing_table is updated along reverse route (route to destination) (this done in update_routing_table function).   
+    -   If RREP message reaches intermediate node . odr message of type 1- RREP is forwarded along forward path using
+	   source address in the routing table (this is done in gen_update_send_rrep function).
+	-   If RREP message reaches source odr  node . odr message of type 2- Application payload is along 
+	    reverse path (path to destination) using  entries in the routing table (this is done in gen_update_send_payload function).
+        Direction is set .i.e is Application payload message is going to the server carrying client message.		
+	   
+   				
+	-  If odr message received  is of type 2 - i.e Application Payload.
+	-   Routing_table is updated along forward route (route to source) using update_routing_table function when payload
+	    message caries client message. This is FREE RREQ'S.   
+    -   If Application Payload message reaches intermediate node and Direction is towards Server . 
+	    Application Payload message is forwarded along reverse path(path to server) using  entries in the routing table 
+		(this is done in gen_update_send_payload function).
+		
+	-   If Application Payload message reaches desination odr  node that is of immediate odr connected to server
+	    (both on same viruatl machine) . Server is Invoked (this is done in Invoke server function).When Message is received from
+		server on unix socket and  message is updated in Application Payload and it is sent to the Client through odr 
+		(this is done in gen_update_send_payload function).
+		
+	-	 If Application Payload message reaches intermediate node and Direction is towards client . 
+	     Application Payload message is forwarded along forward path using  entries in the routing table 
+	 	 (this is done in gen_update_send_payload function).
+		
+	-   If Application Payload message reaches desination odr  node that is of immediate odr connected to client
+	    (both on same viruatl machine) . Client is Invoked (this is done in Invoke client function).
+		1. Message received from server (i.e its timestamp) is sent to client on sun_path the odr 
+		   had recived information of request.
+        2. sun_path is obtained from the port_sun_path table.
+
+ Test Documentation:
+=====================
+1)The program is tested and verified for  communication
+  from one virtual machine(between 1-10) to another virtual machine( between 1-10).
+2)Staleness is also verified by setting a low staleness value. 
+
+
+
+    	
